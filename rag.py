@@ -5,7 +5,7 @@ import chromadb
 from chromadb.utils import embedding_functions
 from chromadb import EmbeddingFunction, Embeddings
 import os
-from typing import Callable
+from typing import Optional, Union, List, Dict, Any,Callable
 import json
 
 import subprocess
@@ -38,21 +38,26 @@ class ChatGLM_EmbeddingFunction(EmbeddingFunction):
     def __call__(self, input: str | list[str]) -> Embeddings:
         payload = {"model": self.model, "input": input,
                    "dimensions": self.dimensions}
-        with self.client.post("https://open.bigmodel.cn/api/paas/v4/embeddings", json=payload) as response:
-            if response.status_code == 200:
-                result = response.json()
-                embeddings = []
-                data = result["data"]
-                for embedding in data:
-                    embeddings.append(array(embedding["embedding"]))
-                return embeddings
-            else:
-                raise Exception(
-                    f"Failed to get embedding from ChatGLM, status code: {response.status_code}")
+        try:
+            with self.client.post("https://open.bigmodel.cn/api/paas/v4/embeddings", json=payload) as response:
+                if response.status_code == 200:
+                    result = response.json()
+                    embeddings = []
+                    data = result["data"]
+                    for embedding in data:
+                        embeddings.append(array(embedding["embedding"]))
+                    return embeddings
+                else:
+                    raise ValueError(f"failed to get embeddings from ChatGLM,status_code:{response.status_code}")
+        except Exception as e:
+            raise ValueError(f"failed to get embeddings from ChatGLM,error:{e}")
 
 
 class RAG:
-    def __init__(self, collection_name: str = "", store_path: str = "", embedding_function=None, persistent: bool = True):
+    def __init__(self, collection_name: str = "", 
+                 store_path: str = "", 
+                 embedding_function:Optional[EmbeddingFunction] = None, 
+                 persistent: bool = True):
         self.store_path = store_path
         if persistent and store_path:
             self.client = chromadb.PersistentClient(path=store_path)
@@ -130,7 +135,9 @@ class RAG:
             self.collection = self.create_collection(collection_name,self.embedding_function)
         return None
 
-    def store(self, text: str | list[str], metadata: dict[str, str] | list[dict]) -> None:
+    def store(self, 
+            text: Union[str, List[str]], 
+            metadata: Union[Dict[str, str], List[Dict[str, Any]]]) -> None:
         if isinstance(text, str) and isinstance(metadata, dict):
             self.collection.add(
                 documents=text,
@@ -152,6 +159,13 @@ class RAG:
         )
         return results["documents"], results["metadatas"], results["ids"]
 
+    def update(self,id:str,text:str,metadata:dict[str,str] = {}):
+        if metadata:
+            self.collection.update(documents=text, metadatas=metadata, ids=id)
+        else:
+            self.collection.update(documents=text, ids=id)
+        return None
+    
     def get_data(self, include: list[str] = ["embeddings", "documents", "metadatas"]):
         return self.collection.get(include=include)  # type: ignore
 
@@ -163,6 +177,93 @@ class RAG:
         collection.add(documents=data["documents"], metadatas=data["metadatas"], ids=data["ids"], embeddings=data["embeddings"])
 
 if __name__ == "__main__":
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "query_memory",
+                "description": "query memory of Ushio Noa in RAG, return text, metadata, uuid",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query_text": {
+                            "type": "string",
+                            "description": "the text to query",
+                        },
+                        "top_k": {
+                            "type": "integer",
+                            "description": "the number of results to return",
+                            "default": 1
+                        }
+                    },
+                    "required": ["query_text"]
+                },
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "handle_memory",
+                "description": "handle memory of Ushio Noa in RAG",
+                "parameters": {
+                "type": "object",
+                "properties": {
+                    "method": {
+                    "type": "string",
+                    "description": "how to handle the memory, including 'store', 'update', 'delete'",
+                    "enum": ["store", "update", "delete"]
+                    }
+                },
+                "oneOf": [
+                    {
+                    "properties": {
+                        "method": { "const": "store" },
+                        "store_text": {
+                        "type": "string",
+                        "description": "the text to store"
+                        },
+                        "store_metadata": {
+                        "type": "object",
+                        "description": "Metadata to associate with the stored text"
+                        }
+                    },
+                    "required": ["store_text"]
+                    },
+                    {
+                    "properties": {
+                        "method": { "const": "update" },
+                        "update_id": {
+                        "type": "string",
+                        "description": "the uuid of the memory to update"
+                        },
+                        "store_text": {
+                        "type": "string",
+                        "description": "the text to update"
+                        },
+                        "update_metadata": {
+                        "type": "object",
+                        "description": "Metadata to update"
+                        }
+                    },
+                    "required": ["update_id", "store_text"]
+                    },
+                    {
+                    "properties": {
+                        "method": { "const": "delete" },
+                        "delete_id": {
+                        "type": "string",
+                        "description": "the uuid of the memory to delete"
+                        }
+                    },
+                    "required": ["delete_id"]
+                    }
+                ],
+                "required": ["method"]
+                }
+            }
+        }
+    ]
+    
     embedding_function = ChatGLM_EmbeddingFunction(
         api_key="", model="embedding-3", dimensions=256)
     
