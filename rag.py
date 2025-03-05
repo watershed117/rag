@@ -7,6 +7,7 @@ from chromadb import EmbeddingFunction, Embeddings
 import os
 from typing import Optional, Union, List, Dict, Any,Callable
 import json
+from requests import RequestException,ConnectionError,HTTPError
 
 import subprocess
 import atexit
@@ -22,7 +23,7 @@ atexit.register(cleanup)
 
 
 class ChatGLM_EmbeddingFunction(EmbeddingFunction):
-    def __init__(self, api_key: str, model: str = "embedding-3", dimensions: int = 2048):
+    def __init__(self, api_key: str, model: str = "embedding-3", dimensions: int = 2048, timeout: int = 10):
         """
         dimensions:sugguested value in [256,512,1024,2048]
         """
@@ -30,6 +31,7 @@ class ChatGLM_EmbeddingFunction(EmbeddingFunction):
         self.client = requests.Session()
         self.client.headers.update({"Authorization": f"Bearer {api_key}"})
         self.model = model
+        self.timeout = timeout
         if model == "embedding-3":
             self.dimensions = dimensions
         else:
@@ -39,7 +41,7 @@ class ChatGLM_EmbeddingFunction(EmbeddingFunction):
         payload = {"model": self.model, "input": input,
                    "dimensions": self.dimensions}
         try:
-            with self.client.post("https://open.bigmodel.cn/api/paas/v4/embeddings", json=payload) as response:
+            with self.client.post("https://open.bigmodel.cn/api/paas/v4/embeddings", json=payload, timeout=self.timeout) as response:
                 if response.status_code == 200:
                     result = response.json()
                     embeddings = []
@@ -48,11 +50,45 @@ class ChatGLM_EmbeddingFunction(EmbeddingFunction):
                         embeddings.append(array(embedding["embedding"]))
                     return embeddings
                 else:
-                    raise ValueError(f"failed to get embeddings from ChatGLM,status_code:{response.status_code}")
+                    raise HTTPError(response=response)
+        except requests.Timeout:
+            raise ConnectionError("Request timed out")
+        except ConnectionError as e:
+            raise ConnectionError(f"Network connection error: {e}")
         except Exception as e:
-            raise ValueError(f"failed to get embeddings from ChatGLM,error:{e}")
+            raise RuntimeError(f"Unexpected error: {e}")
 
+class SiliconFlow_EmbeddingFunction(EmbeddingFunction):
+    def __init__(self, api_key: str, model: str = "BAAI/bge-m3", timeout: int = 10):
+        """
+        dimensions:sugguested value in [256,512,1024,2048]
+        """
+        super().__init__()
+        self.client = requests.Session()
+        self.client.headers.update({"Authorization": f"Bearer {api_key}"})
+        self.model = model
+        self.timeout = timeout
 
+    def __call__(self, input: str | list[str]) -> Embeddings:
+        payload = {"model": self.model, "input": input, "encoding_format": "float"}
+        try:
+            with self.client.post("https://api.siliconflow.cn/v1/embeddings", json = payload, timeout = self.timeout) as response:
+                if response.status_code == 200:
+                    result = response.json()
+                    embeddings = []
+                    data = result["data"]
+                    for embedding in data:
+                        embeddings.append(array(embedding["embedding"]))
+                    return embeddings
+                else:
+                    raise HTTPError(response=response)
+        except requests.Timeout:
+            raise ConnectionError("Request timed out")
+        except ConnectionError as e:
+            raise ConnectionError(f"Network connection error: {e}")
+        except Exception as e:
+            raise RuntimeError(f"Unexpected error: {e}")
+        
 class RAG:
     def __init__(self, collection_name: str = "", 
                  store_path: str = "", 
@@ -152,7 +188,7 @@ class RAG:
             )
         return None
 
-    def search(self, query_text: str, top_k: int = 1):
+    def query(self, query_text: str, top_k: int = 1):
         results = self.collection.query(
             query_texts=query_text,
             n_results=top_k
@@ -166,6 +202,10 @@ class RAG:
             self.collection.update(documents=text, ids=id)
         return None
     
+    def delete(self,id:str|list[str]):
+        self.collection.delete(ids=id)
+        return None
+
     def get_data(self, include: list[str] = ["embeddings", "documents", "metadatas"]):
         return self.collection.get(include=include)  # type: ignore
 
@@ -177,6 +217,10 @@ class RAG:
         collection.add(documents=data["documents"], metadatas=data["metadatas"], ids=data["ids"], embeddings=data["embeddings"])
 
 if __name__ == "__main__":
+    import sys
+    sys.path.append(os.path.split(__file__)[0])
+    from api import Base_llm,MessageGenerator
+    import datetime
     tools = [
         {
             "type": "function",
@@ -210,43 +254,53 @@ if __name__ == "__main__":
                 "properties": {
                     "method": {
                     "type": "string",
-                    "description": "how to handle the memory, including 'store', 'update', 'delete'",
-                    "enum": ["store", "update", "delete"]
+                    "description": "how to handle the memory",
+                    "enum": ["store", "query","update", "delete"]
                     }
                 },
                 "oneOf": [
                     {
                     "properties": {
                         "method": { "const": "store" },
-                        "store_text": {
+                        "text": {
                         "type": "string",
                         "description": "the text to store"
                         },
-                        "store_metadata": {
+                        "metadata": {
                         "type": "object",
-                        "description": "Metadata to associate with the stored text"
+                        "description": "Metadata to associate with the stored text, should be a dictionary"
                         }
                     },
                     "required": ["store_text"]
                     },
                     {
                     "properties": {
+                        "method": { "const": "query" },
+                        "query_text": {
+                        "type": "string",
+                        "description": "text to query"
+                        }
+                    },
+                    "required": ["query_text"]
+                    },
+                    {
+                    "properties": {
                         "method": { "const": "update" },
-                        "update_id": {
+                        "id": {
                         "type": "string",
                         "description": "the uuid of the memory to update"
                         },
-                        "store_text": {
+                        "text": {
                         "type": "string",
                         "description": "the text to update"
                         },
-                        "update_metadata": {
+                        "metadata": {
                         "type": "object",
-                        "description": "Metadata to update"
-                        }
-                    },
-                    "required": ["update_id", "store_text"]
-                    },
+                        "description": "Metadata to associate with the updated text, should be a dictionary"
+                            }
+                        },
+                    "required": ["update_id","update_text"]
+                    }
                     {
                     "properties": {
                         "method": { "const": "delete" },
@@ -257,6 +311,7 @@ if __name__ == "__main__":
                     },
                     "required": ["delete_id"]
                     }
+
                 ],
                 "required": ["method"]
                 }
@@ -264,32 +319,22 @@ if __name__ == "__main__":
         }
     ]
     
-    embedding_function = ChatGLM_EmbeddingFunction(
-        api_key="", model="embedding-3", dimensions=256)
+    embedding_function = SiliconFlow_EmbeddingFunction(
+        api_key="sk-bltyfqycpshmbeferivmixvhqahjsunjofzbckflnqxpksoe", 
+        model="BAAI/bge-m3")
     
-    embedding=embedding_function("xxx")
-
-    rag = RAG(store_path=r"D:\xxx", collection_name="xxx",
+    rag = RAG(store_path=r"C:\Users\watershed\Desktop\rag\memory", collection_name="test",
             embedding_function=embedding_function,)
+    messagegenerator=MessageGenerator()
 
-    # rag.create_collection("xxx")
-    # rag.change_collection("xxx")
+    llm=Base_llm(api_key="sk-bltyfqycpshmbeferivmixvhqahjsunjofzbckflnqxpksoe",
+                 base_url="https://api.siliconflow.cn/v1",
+                 model="Qwen/Qwen2.5-72B-Instruct-128K",
+                 tools=tools,
+                 limit="16k")
+    reply=llm.send(messages=messagegenerator.gen_user_msg("测试rag工具存储方法"))
+    reply=llm.send(messages=messagegenerator.gen_user_msg("测试rag工具查询方法"))
+    reply=llm.send(messages=messagegenerator.gen_user_msg("测试rag工具存储方法"))
+    print(reply)
+    # rag.store("xxx",{"time":str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))})
 
-    import datetime
-    texts = [
-        "1",
-        "2",
-        "3",
-        "4"
-    ]
-    metadatas = [{"time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")} for _ in range(len(texts))]
-    rag.store(texts, metadatas)
-    
-    print(rag.get_data())
-
-    results = rag.search("xxx", top_k=1)
-    print(results)
-
-    rag.delete_collection(rag.collection.name)
-
-    rag.release_disk(rag.collection.name)
