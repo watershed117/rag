@@ -1,0 +1,6 @@
+/memory
+*.pyc
+*.pyd
+config.json
+config.py
+/python-3.13.2-embed-amd64
