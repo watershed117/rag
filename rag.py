@@ -88,9 +88,40 @@ class SiliconFlow_EmbeddingFunction(EmbeddingFunction):
             raise ConnectionError(f"Network connection error: {e}")
         except Exception as e:
             raise RuntimeError(f"Unexpected error: {e}")
+    
+class Online_EmbeddingFunction(EmbeddingFunction):
+    def __init__(self, api_key: str, url:str="https://api.siliconflow.cn/v1/embeddings", model: str = "BAAI/bge-m3" , timeout: int = 10):
+        super().__init__()
+        self.client = requests.Session()
+        self.client.headers.update({"Authorization": f"Bearer {api_key}"})
+        self.url = url
+        self.model = model
+        self.timeout = timeout
+
+    def __call__(self, input: str | list[str], **kwargs) -> Embeddings:
+        payload = {"model": self.model, "input": input}
+        if kwargs:
+            payload.update(kwargs)
+        try:
+            with self.client.post(self.url, json = payload, timeout = self.timeout) as response:
+                if response.status_code == 200:
+                    result = response.json()
+                    embeddings = []
+                    data = result["data"]
+                    for embedding in data:
+                        embeddings.append(array(embedding["embedding"]))
+                    return embeddings
+                else:
+                    raise HTTPError(response=response)
+        except requests.Timeout:
+            raise ConnectionError("Request timed out")
+        except ConnectionError as e:
+            raise ConnectionError(f"Network connection error: {e}")
+        except Exception as e:
+            raise RuntimeError(f"Unexpected error: {e}")
         
 class RAG:
-    def __init__(self, collection_name: str = "", 
+    def __init__(self, 
                  store_path: str = "", 
                  embedding_function:Optional[EmbeddingFunction] = None, 
                  persistent: bool = True):
@@ -100,10 +131,6 @@ class RAG:
         else:
             self.client = chromadb.Client()
         self.embedding_function = embedding_function or embedding_functions.DefaultEmbeddingFunction()  # 向量维度：384
-        if collection_name in self.client.list_collections():
-            self.collection = self.client.get_collection(collection_name)
-        else:
-            self.collection = self.create_collection(collection_name,self.embedding_function)
 
     def listen_folder(self, function: Callable, *args, **kwargs):
         # 获取路径下的所有文件和文件夹
@@ -124,11 +151,14 @@ class RAG:
         removed = [folder for folder in before if folder not in after]
         return added, removed, result
 
-    def create_collection(self, collection_name: str, embedding_function=embedding_functions.DefaultEmbeddingFunction()):
+    def create_collection(self, collection_name: str, embedding_function:EmbeddingFunction|None = None) -> chromadb.Collection:
         if len(collection_name) < 4:
             raise ValueError("collection name should be at least 4 characters")
-        collection = self.client.create_collection(
-            collection_name, embedding_function=embedding_function)  # type: ignore
+        if embedding_function:
+            collection = self.client.create_collection(
+                collection_name, embedding_function=embedding_function)
+        else:
+            collection = self.client.create_collection(collection_name)
         ids = str(uuid4())
         added, removed, result = self.listen_folder(
             collection.add, documents="tmp", ids=ids)
@@ -326,8 +356,10 @@ if __name__ == "__main__":
         api_key="sk-bltyfqycpshmbeferivmixvhqahjsunjofzbckflnqxpksoe", 
         model="BAAI/bge-m3")
     
-    rag = RAG(store_path=r"C:\Users\watershed\Desktop\rag\memory", collection_name="test",
+    rag = RAG(store_path=r"C:\Users\watershed\Desktop\rag\memory",
             embedding_function=embedding_function,)
+    rag.create_collection("test")
+    rag.change_collection("test")
     # rag = RAG(store_path=r"D:\rag\memory", collection_name="test",
     #         embedding_function=embedding_function,)
     messagegenerator=MessageGenerator()
