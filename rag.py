@@ -6,7 +6,7 @@ from chromadb.utils import embedding_functions
 from chromadb import EmbeddingFunction, Embeddings
 import os
 from typing import Optional, Union, List, Dict, Any,Callable
-import json
+import json€
 from requests import RequestException,ConnectionError,HTTPError
 
 import subprocess
@@ -369,7 +369,7 @@ if __name__ == "__main__":
                  model="Qwen/Qwen2.5-72B-Instruct-128K",
                  tools=tools,
                  limit="16k",
-                 proxy=None)
+                 proxy=None) # type: ignore
     reply=llm.send(messages=messagegenerator.gen_user_msg("测试rag工具存储方法"))
     print(reply)
     llm.clear_history()
