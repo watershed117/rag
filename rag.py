@@ -6,7 +6,7 @@ from chromadb.utils import embedding_functions
 from chromadb import EmbeddingFunction, Embeddings
 import os
 from typing import Optional, Union, List, Dict, Any,Callable
-import json€
+import json
 from requests import RequestException,ConnectionError,HTTPError
 
 import subprocess
@@ -151,14 +151,15 @@ class RAG:
         removed = [folder for folder in before if folder not in after]
         return added, removed, result
 
-    def create_collection(self, collection_name: str, embedding_function:EmbeddingFunction|None = None) -> chromadb.Collection:
+    def create_collection(self, collection_name: str, embedding_function:EmbeddingFunction|None = None, metadata:dict = {}) -> chromadb.Collection:
         if len(collection_name) < 4:
             raise ValueError("collection name should be at least 4 characters")
+        kwargs:dict[str,Any] = {"name":collection_name}
         if embedding_function:
-            collection = self.client.create_collection(
-                collection_name, embedding_function=embedding_function)
-        else:
-            collection = self.client.create_collection(collection_name)
+            kwargs["embedding_function"] = embedding_function
+        if metadata:
+            kwargs["metadata"] = metadata
+        collection = self.client.create_collection(**kwargs)
         ids = str(uuid4())
         added, removed, result = self.listen_folder(
             collection.add, documents="tmp", ids=ids)
@@ -196,26 +197,22 @@ class RAG:
 
     def change_collection(self, collection_name: str) -> None:
         if collection_name in self.client.list_collections():
-            self.collection = self.client.get_collection(collection_name)
+            self.collection = self.client.get_collection(collection_name,embedding_function=self.embedding_function) # type: ignore
         else:
-            self.collection = self.create_collection(collection_name,self.embedding_function)
+            raise ValueError(f"collection {collection_name} not found")
         return None
 
     def store(self, 
             text: Union[str, List[str]], 
-            metadata: Union[Dict[str, str], List[Dict[str, Any]]]) -> None:
-        if isinstance(text, str) and isinstance(metadata, dict):
-            self.collection.add(
-                documents=text,
-                metadatas=metadata,
-                ids=str(uuid4())
-            )
-        elif isinstance(text, list) and isinstance(metadata, list):
-            self.collection.add(
-                documents=text,
-                metadatas=metadata, # type: ignore
-                ids=[str(uuid4()) for _ in range(len(text))]
-            )
+            metadata: Union[Dict[str, str], List[Dict[str, Any]],None]=None) -> None:
+        kwargs:dict[str,Any]={"documents":text}
+        if metadata and isinstance(metadata, dict):
+            kwargs["metadatas"]=[metadata]
+        if isinstance(text, str):
+            kwargs["ids"]=[str(uuid4())]
+        if isinstance(text, list):
+            kwargs["ids"]=[str(uuid4()) for _ in range(len(text))]
+        self.collection.add(**kwargs)
         return None
 
     def query(self, query_text: str, top_k: int = 1):
@@ -223,7 +220,7 @@ class RAG:
             query_texts=query_text,
             n_results=top_k
         )
-        return results["documents"], results["metadatas"], results["ids"]
+        return results["documents"], results["metadatas"], results["ids"], results["distances"]
 
     def update(self,id:str,text:str,metadata:dict[str,str] = {}):
         if metadata:
@@ -247,140 +244,4 @@ class RAG:
         collection=self.client.get_collection(collection_name)
         collection.add(documents=data["documents"], metadatas=data["metadatas"], ids=data["ids"], embeddings=data["embeddings"])
 
-if __name__ == "__main__":
-    import sys
-    cwd=os.path.split(__file__)[0]
-    sys.path.append(cwd)
-    os.chdir(cwd)
-    from api import Base_llm,MessageGenerator
-    import datetime
-    tools = [
-        {
-            "type": "function",
-            "function": {
-                "name": "query_memory",
-                "description": "query memory of Ushio Noa in RAG, return text, metadata, uuid",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "query_text": {
-                            "type": "string",
-                            "description": "the text to query",
-                        },
-                        "top_k": {
-                            "type": "integer",
-                            "description": "the number of results to return",
-                            "default": 1
-                        }
-                    },
-                    "required": ["query_text"]
-                },
-            }
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "handle_memory",
-                "description": "handle memory of Ushio Noa in RAG",
-                "parameters": {
-                "type": "object",
-                "properties": {
-                    "method": {
-                    "type": "string",
-                    "description": "how to handle the memory",
-                    "enum": ["store", "query","update", "delete"]
-                    }
-                },
-                "oneOf": [
-                    {
-                    "properties": {
-                        "method": { "const": "store" },
-                        "text": {
-                        "type": "string",
-                        "description": "the text to store"
-                        },
-                        "metadata": {
-                        "type": "object",
-                        "description": "Metadata to associate with the stored text, should be a dictionary"
-                        }
-                    },
-                    "required": ["store_text"]
-                    },
-                    {
-                    "properties": {
-                        "method": { "const": "query" },
-                        "query_text": {
-                        "type": "string",
-                        "description": "text to query"
-                        }
-                    },
-                    "required": ["query_text"]
-                    },
-                    {
-                    "properties": {
-                        "method": { "const": "update" },
-                        "id": {
-                        "type": "string",
-                        "description": "the uuid of the memory to update"
-                        },
-                        "text": {
-                        "type": "string",
-                        "description": "the text to update"
-                        },
-                        "metadata": {
-                        "type": "object",
-                        "description": "Metadata to associate with the updated text, should be a dictionary"
-                            }
-                        },
-                    "required": ["update_id","update_text"]
-                    },
-                    {
-                    "properties": {
-                        "method": { "const": "delete" },
-                        "delete_id": {
-                        "type": "string",
-                        "description": "the uuid of the memory to delete"
-                        }
-                    },
-                    "required": ["delete_id"]
-                    }
-
-                ],
-                "required": ["method"]
-                }
-            }
-        }
-    ]
-    
-    embedding_function = SiliconFlow_EmbeddingFunction(
-        api_key="sk-bltyfqycpshmbeferivmixvhqahjsunjofzbckflnqxpksoe", 
-        model="BAAI/bge-m3")
-    
-    rag = RAG(store_path=r"C:\Users\watershed\Desktop\rag\memory",
-            embedding_function=embedding_function,)
-    rag.create_collection("test")
-    rag.change_collection("test")
-    # rag = RAG(store_path=r"D:\rag\memory", collection_name="test",
-    #         embedding_function=embedding_function,)
-    messagegenerator=MessageGenerator()
-
-    llm=Base_llm(api_key="sk-bltyfqycpshmbeferivmixvhqahjsunjofzbckflnqxpksoe",
-                 base_url="https://api.siliconflow.cn/v1",
-                 model="Qwen/Qwen2.5-72B-Instruct-128K",
-                 tools=tools,
-                 limit="16k",
-                 proxy=None) # type: ignore
-    reply=llm.send(messages=messagegenerator.gen_user_msg("测试rag工具存储方法"))
-    print(reply)
-    llm.clear_history()
-    reply=llm.send(messages=messagegenerator.gen_user_msg("测试rag工具查询方法"))
-    print(reply)
-    llm.clear_history()
-    reply=llm.send(messages=messagegenerator.gen_user_msg("测试rag工具更新方法"))
-    print(reply)
-    llm.clear_history()
-    reply=llm.send(messages=messagegenerator.gen_user_msg("测试rag工具删除方法"))
-    print(reply)
-    llm.clear_history()
-    # rag.store("xxx",{"time":str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))})
 
