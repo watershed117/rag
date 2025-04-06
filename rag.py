@@ -196,11 +196,15 @@ class RAG:
             raise ValueError(f"collection {name} not found in config.json")
 
     def change_collection(self, collection_name: str) -> None:
-        if collection_name in self.client.list_collections():
-            self.collection = self.client.get_collection(collection_name,embedding_function=self.embedding_function) # type: ignore
+        print(self.client.list_collections())
+        collections = self.client.list_collections()
+        for collection in collections:
+            if collection.name == collection_name:
+                self.collection = self.client.get_collection(collection_name,embedding_function=self.embedding_function) # type: ignore
+                return None
         else:
             raise ValueError(f"collection {collection_name} not found")
-        return None
+
 
     def store(self, 
             text: Union[str, List[str]], 

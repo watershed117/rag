@@ -8,6 +8,7 @@ from pydantic import BaseModel
 import json
 import uvicorn
 from rag import RAG, Online_EmbeddingFunction
+import chromadb.utils.embedding_functions as embedding_functions
 from fastapi.responses import JSONResponse
 
 
@@ -23,6 +24,13 @@ class Config(BaseModel):
 
 config=Config.model_validate(data)
 embedding_function = Online_EmbeddingFunction(api_key=config.embedding_api_key, url=config.embedding_url, model=config.embedding_model)
+
+embedding_functions = embedding_functions.OpenAIEmbeddingFunction(
+                api_key=config.embedding_api_key,
+                api_base=config.embedding_url,
+                model_name=config.embedding_model
+            )
+
 rag = RAG(store_path=config.store_path, embedding_function=embedding_function)
 app = fastapi.FastAPI()
 
