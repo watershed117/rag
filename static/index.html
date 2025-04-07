@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAG 数据管理系统</title>
+    <style>
+        body {
+            font-family: 'Microsoft YaHei', sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1, h2 {
+            color: #2c3e50;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 15px;
+            background-color: #f9f9f9;
+            border-radius: 5px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, textarea, select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        .danger {
+            background-color: #e74c3c;
+        }
+        .danger:hover {
+            background-color: #c0392b;
+        }
+        .success {
+            background-color: #2ecc71;
+        }
+        .success:hover {
+            background-color: #27ae60;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        .json-viewer {
+            background-color: #f8f8f8;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        .hidden {
+            display: none;
+        }
+        .tab {
+            overflow: hidden;
+            border: 1px solid #ccc;
+            background-color: #f1f1f1;
+            border-radius: 5px 5px 0 0;
+        }
+        .tab button {
+            background-color: inherit;
+            float: left;
+            border: none;
+            outline: none;
+            cursor: pointer;
+            padding: 14px 16px;
+            transition: 0.3s;
+            color: #333;
+        }
+        .tab button:hover {
+            background-color: #ddd;
+        }
+        .tab button.active {
+            background-color: #3498db;
+            color: white;
+        }
+        .tabcontent {
+            display: none;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-top: none;
+            border-radius: 0 0 5px 5px;
+            background-color: white;
+        }
+        .tabcontent.active {
+            display: block;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .status.success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>RAG 数据管理系统</h1>
+        
+        <div class="tab">
+            <button class="tablinks active" onclick="openTab(event, 'collections')">集合管理</button>
+            <button class="tablinks" onclick="openTab(event, 'data')">数据管理</button>
+            <button class="tablinks" onclick="openTab(event, 'query')">查询测试</button>
+        </div>
+        
+        <div id="collections" class="tabcontent active">
+            <div class="section">
+                <h2>集合管理</h2>
+                
+                <div class="form-group">
+                    <label for="collectionName">集合名称</label>
+                    <input type="text" id="collectionName" placeholder="输入集合名称 (4-64个字符)">
+                </div>
+                
+                <div class="form-group">
+                    <label for="collectionMetadata">元数据 (JSON格式)</label>
+                    <textarea id="collectionMetadata" rows="3" placeholder='{"key": "value"}'></textarea>
+                </div>
+                
+                <button onclick="createCollection()" class="success">创建集合</button>
+                <button onclick="deleteCollection()" class="danger">删除集合</button>
+                <button onclick="changeCollection()">切换集合</button>
+                <button onclick="listCollections()">刷新集合列表</button>
+                
+                <div id="collectionStatus" class="status hidden"></div>
+                
+                <h3>当前集合列表</h3>
+                <table id="collectionsTable">
+                    <thead>
+                        <tr>
+                            <th>名称</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+        
+        <div id="data" class="tabcontent">
+            <div class="section">
+                <h2>数据管理</h2>
+                <p id="currentCollection">当前集合: <span id="currentCollectionName">未选择</span></p>
+                
+                <div class="form-group">
+                    <label for="dataText">文本内容</label>
+                    <textarea id="dataText" rows="3" placeholder="输入要存储的文本"></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label for="dataMetadata">元数据 (JSON格式)</label>
+                    <textarea id="dataMetadata" rows="3" placeholder='{"key": "value"}'></textarea>
+                </div>
+                
+                <button onclick="storeData()" class="success">存储数据</button>
+                <button onclick="getAllData()">获取所有数据</button>
+                
+                <div id="dataStatus" class="status hidden"></div>
+                
+                <h3>当前集合中的数据</h3>
+                <table id="dataTable">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>文本内容</th>
+                            <th>元数据</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+        
+        <div id="query" class="tabcontent">
+            <div class="section">
+                <h2>查询测试</h2>
+                <p id="queryCurrentCollection">当前集合: <span id="queryCollectionName">未选择</span></p>
+                
+                <div class="form-group">
+                    <label for="queryText">查询文本</label>
+                    <input type="text" id="queryText" placeholder="输入查询文本">
+                </div>
+                
+                <div class="form-group">
+                    <label for="topK">返回结果数量</label>
+                    <input type="number" id="topK" value="3" min="1">
+                </div>
+                
+                <div class="form-group">
+                    <label for="similarityThreshold">相似度阈值 (0-1)</label>
+                    <input type="number" id="similarityThreshold" value="0.5" min="0" max="1" step="0.1">
+                </div>
+                
+                <button onclick="queryData()">执行查询</button>
+                
+                <div id="queryStatus" class="status hidden"></div>
+                
+                <h3>查询结果</h3>
+                <table id="queryResultsTable">
+                    <thead>
+                        <tr>
+                            <th>相似度</th>
+                            <th>文本内容</th>
+                            <th>元数据</th>
+                            <th>ID</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentCollection = null;
+        
+        // 切换标签页
+        function openTab(evt, tabName) {
+            const tabcontents = document.getElementsByClassName("tabcontent");
+            for (let i = 0; i < tabcontents.length; i++) {
+                tabcontents[i].classList.remove("active");
+            }
+            
+            const tablinks = document.getElementsByClassName("tablinks");
+            for (let i = 0; i < tablinks.length; i++) {
+                tablinks[i].classList.remove("active");
+            }
+            
+            document.getElementById(tabName).classList.add("active");
+            evt.currentTarget.classList.add("active");
+        }
+        
+        // 显示状态消息
+        function showStatus(elementId, message, isSuccess) {
+            const statusElement = document.getElementById(elementId);
+            statusElement.textContent = message;
+            statusElement.classList.remove("hidden", "success", "error");
+            statusElement.classList.add(isSuccess ? "success" : "error");
+            
+            setTimeout(() => {
+                statusElement.classList.add("hidden");
+            }, 5000);
+        }
+        
+        // 创建集合
+        async function createCollection() {
+            const name = document.getElementById("collectionName").value.trim();
+            const metadataText = document.getElementById("collectionMetadata").value.trim();
+            
+            if (name.length < 4 || name.length > 64) {
+                showStatus("collectionStatus", "集合名称长度应在4-64个字符之间", false);
+                return;
+            }
+            
+            let metadata = {};
+            if (metadataText) {
+                try {
+                    metadata = JSON.parse(metadataText);
+                } catch (e) {
+                    showStatus("collectionStatus", "元数据不是有效的JSON格式", false);
+                    return;
+                }
+            }
+            
+            try {
+                const response = await fetch(`/rag/create_collection/${name}`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({ metadata })
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || "创建集合失败");
+                }
+                
+                showStatus("collectionStatus", `集合 ${name} 创建成功`, true);
+                listCollections();
+                document.getElementById("collectionName").value = "";
+                document.getElementById("collectionMetadata").value = "";
+            } catch (error) {
+                showStatus("collectionStatus", error.message, false);
+            }
+        }
+        
+        // 删除集合
+        async function deleteCollection() {
+            const name = document.getElementById("collectionName").value.trim();
+            
+            if (!name) {
+                showStatus("collectionStatus", "请输入要删除的集合名称", false);
+                return;
+            }
+            
+            if (!confirm(`确定要删除集合 ${name} 吗？此操作不可撤销！`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/rag/delete_collection/${name}`, {
+                    method: "GET"
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || "删除集合失败");
+                }
+                
+                showStatus("collectionStatus", `集合 ${name} 删除成功`, true);
+                listCollections();
+                document.getElementById("collectionName").value = "";
+                
+                if (currentCollection === name) {
+                    currentCollection = null;
+                    updateCurrentCollectionDisplay();
+                }
+            } catch (error) {
+                showStatus("collectionStatus", error.message, false);
+            }
+        }
+        
+        // 切换集合
+        async function changeCollection() {
+            const name = document.getElementById("collectionName").value.trim();
+            
+            if (!name) {
+                showStatus("collectionStatus", "请输入要切换的集合名称", false);
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/rag/change_collection/${name}`, {
+                    method: "GET"
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || "切换集合失败");
+                }
+                
+                currentCollection = name;
+                updateCurrentCollectionDisplay();
+                showStatus("collectionStatus", `已切换到集合 ${name}`, true);
+                getAllData();
+            } catch (error) {
+                showStatus("collectionStatus", error.message, false);
+            }
+        }
+        
+        // 列出所有集合
+        async function listCollections() {
+            try {
+                const response = await fetch("/rag/list_collections");
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || "获取集合列表失败");
+                }
+                
+                const data = await response.json();
+                const tableBody = document.querySelector("#collectionsTable tbody");
+                tableBody.innerHTML = "";
+                
+                if (data.collections && data.collections.length > 0) {
+                    data.collections.forEach(collection => {
+                        const row = document.createElement("tr");
+                        
+                        const nameCell = document.createElement("td");
+                        nameCell.textContent = collection;
+                        row.appendChild(nameCell);
+                        
+                        const actionCell = document.createElement("td");
+                        const selectButton = document.createElement("button");
+                        selectButton.textContent = "选择";
+                        selectButton.onclick = () => {
+                            document.getElementById("collectionName").value = collection;
+                            changeCollection();
+                        };
+                        actionCell.appendChild(selectButton);
+                        
+                        row.appendChild(actionCell);
+                        tableBody.appendChild(row);
+                    });
+                } else {
+                    const row = document.createElement("tr");
+                    const cell = document.createElement("td");
+                    cell.colSpan = 2;
+                    cell.textContent = "没有可用的集合";
+                    row.appendChild(cell);
+                    tableBody.appendChild(row);
+                }
+            } catch (error) {
+                showStatus("collectionStatus", error.message, false);
+            }
+        }
+        
+        // 更新当前集合显示
+        function updateCurrentCollectionDisplay() {
+            document.getElementById("currentCollectionName").textContent = currentCollection || "未选择";
+            document.getElementById("queryCollectionName").textContent = currentCollection || "未选择";
+        }
+        
+    // 存储数据
+    async function storeData() {
+        if (!currentCollection) {
+            showStatus("dataStatus", "请先选择集合", false);
+            return;
+        }
+        
+        const text = document.getElementById("dataText").value.trim();
+        const metadataText = document.getElementById("dataMetadata").value.trim();
+        
+        if (!text) {
+            showStatus("dataStatus", "请输入要存储的文本", false);
+            return;
+        }
+        
+        let metadata = {};
+        if (metadataText) {
+            try {
+                metadata = JSON.parse(metadataText);
+                if (typeof metadata !== 'object' || metadata === null) {
+                    throw new Error("元数据必须是对象");
+                }
+                // 确保所有值都是字符串
+                for (const key in metadata) {
+                    if (typeof metadata[key] !== 'string') {
+                        metadata[key] = String(metadata[key]);
+                    }
+                }
+                metadata = { ...metadata }; // 创建新对象以确保属性可枚举
+            } catch (e) {
+                showStatus("dataStatus", "元数据不是有效的JSON格式", false);
+                return;
+            }
+        }
+        
+        try {
+            const response = await fetch("/rag/store", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    text,
+                    metadata: Object.keys(metadata).length > 0 ? metadata : undefined
+                })
+            });
+            
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || "存储数据失败");
+            }
+            
+            showStatus("dataStatus", "数据存储成功", true);
+            document.getElementById("dataText").value = "";
+            document.getElementById("dataMetadata").value = "";
+            getAllData();
+        } catch (error) {
+            showStatus("dataStatus", error.message, false);
+        }
+    }
+    
+        // 获取所有数据
+        async function getAllData() {
+            if (!currentCollection) {
+                showStatus("dataStatus", "请先选择集合", false);
+                return;
+            }
+            
+            try {
+                const response = await fetch("/rag/get_data");
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || "获取数据失败");
+                }
+                
+                const data = await response.json();
+                const tableBody = document.querySelector("#dataTable tbody");
+                tableBody.innerHTML = "";
+                
+                if (data.data && data.data.length > 0) {
+                    data.data.forEach(item => {
+                        const row = document.createElement("tr");
+                        
+                        const idCell = document.createElement("td");
+                        idCell.textContent = item.id;
+                        row.appendChild(idCell);
+                        
+                        const textCell = document.createElement("td");
+                        textCell.textContent = item.document;
+                        row.appendChild(textCell);
+                        
+                        const metadataCell = document.createElement("td");
+                        metadataCell.textContent = JSON.stringify(item.metadata || {}, null, 2);
+                        row.appendChild(metadataCell);
+                        
+                        const actionCell = document.createElement("td");
+                        
+                        const deleteButton = document.createElement("button");
+                        deleteButton.textContent = "删除";
+                        deleteButton.classList.add("danger");
+                        deleteButton.onclick = () => deleteItem(item.id);
+                        actionCell.appendChild(deleteButton);
+                        
+                        const updateButton = document.createElement("button");
+                        updateButton.textContent = "更新";
+                        updateButton.onclick = () => prepareUpdate(item);
+                        actionCell.appendChild(updateButton);
+                        
+                        row.appendChild(actionCell);
+                        tableBody.appendChild(row);
+                    });
+                } else {
+                    const row = document.createElement("tr");
+                    const cell = document.createElement("td");
+                    cell.colSpan = 4;
+                    cell.textContent = "当前集合中没有数据";
+                    row.appendChild(cell);
+                    tableBody.appendChild(row);
+                }
+            } catch (error) {
+                showStatus("dataStatus", error.message, false);
+            }
+        }
+        
+        // 删除数据项
+        async function deleteItem(id) {
+            if (!confirm(`确定要删除ID为 ${id} 的数据吗？此操作不可撤销！`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch("/rag/delete", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({ id })
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || "删除数据失败");
+                }
+                
+                showStatus("dataStatus", "数据删除成功", true);
+                getAllData();
+            } catch (error) {
+                showStatus("dataStatus", error.message, false);
+            }
+        }
+        
+        // 准备更新数据
+        function prepareUpdate(item) {
+            document.getElementById("dataText").value = item.document;
+            document.getElementById("dataMetadata").value = JSON.stringify(item.metadata || {}, null, 2);
+            
+            // 修改存储按钮为更新按钮
+            const storeButton = document.querySelector("#data button.success");
+            storeButton.textContent = "更新数据";
+            storeButton.onclick = async () => {
+                await updateItem(item.id);
+                // 恢复按钮状态
+                storeButton.textContent = "存储数据";
+                storeButton.onclick = storeData;
+            };
+            
+            showStatus("dataStatus", `准备更新ID为 ${item.id} 的数据`, true);
+        }
+        
+        // 更新数据项
+        async function updateItem(id) {
+            const text = document.getElementById("dataText").value.trim();
+            const metadataText = document.getElementById("dataMetadata").value.trim();
+            
+            if (!text) {
+                showStatus("dataStatus", "请输入要更新的文本", false);
+                return;
+            }
+            
+            let metadata = {};
+            if (metadataText) {
+                try {
+                    metadata = JSON.parse(metadataText);
+                } catch (e) {
+                    showStatus("dataStatus", "元数据不是有效的JSON格式", false);
+                    return;
+                }
+            }
+            
+            try {
+                const response = await fetch("/rag/update", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        id,
+                        text,
+                        metadata
+                    })
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || "更新数据失败");
+                }
+                
+                showStatus("dataStatus", "数据更新成功", true);
+                document.getElementById("dataText").value = "";
+                document.getElementById("dataMetadata").value = "";
+                getAllData();
+            } catch (error) {
+                showStatus("dataStatus", error.message, false);
+            }
+        }
+        
+        // 查询数据
+        async function queryData() {
+            if (!currentCollection) {
+                showStatus("queryStatus", "请先选择集合", false);
+                return;
+            }
+            
+            const queryText = document.getElementById("queryText").value.trim();
+            const topK = document.getElementById("topK").value;
+            const similarityThreshold = document.getElementById("similarityThreshold").value;
+            
+            if (!queryText) {
+                showStatus("queryStatus", "请输入查询文本", false);
+                return;
+            }
+            
+            try {
+                const response = await fetch("/rag/query", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        query_text: queryText,
+                        top_k: parseInt(topK),
+                        similarity: parseFloat(similarityThreshold)
+                    })
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || "查询失败");
+                }
+                
+                const data = await response.json();
+                const tableBody = document.querySelector("#queryResultsTable tbody");
+                tableBody.innerHTML = "";
+                
+                if (data.result && data.result.length > 0) {
+                    data.result.forEach(item => {
+                        const row = document.createElement("tr");
+                        
+                        const similarityCell = document.createElement("td");
+                        similarityCell.textContent = item.similarity;
+                        row.appendChild(similarityCell);
+                        
+                        const documentCell = document.createElement("td");
+                        documentCell.textContent = item.document;
+                        row.appendChild(documentCell);
+                        
+                        const metadataCell = document.createElement("td");
+                        metadataCell.textContent = JSON.stringify(item.metadata || {}, null, 2);
+                        row.appendChild(metadataCell);
+                        
+                        const idCell = document.createElement("td");
+                        idCell.textContent = item.id;
+                        row.appendChild(idCell);
+                        
+                        tableBody.appendChild(row);
+                    });
+                } else {
+                    const row = document.createElement("tr");
+                    const cell = document.createElement("td");
+                    cell.colSpan = 4;
+                    cell.textContent = "没有找到匹配的结果";
+                    row.appendChild(cell);
+                    tableBody.appendChild(row);
+                }
+                
+                showStatus("queryStatus", `找到 ${data.result.length} 条结果`, true);
+            } catch (error) {
+                showStatus("queryStatus", error.message, false);
+            }
+        }
+        
+        // 初始化页面
+        document.addEventListener("DOMContentLoaded", () => {
+            listCollections();
+        });
+    </script>
+</body>
+</html>
