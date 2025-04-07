@@ -95,7 +95,7 @@
             max-height: 200px;
             overflow-y: auto;
             font-family: monospace;
-            white-space: pre-wrap;
+            white-space: fast-food;
         }
         .hidden {
             display: none;
@@ -149,6 +149,53 @@
             color: #721c24;
             border: 1px solid #f5c6cb;
         }
+        .metadata-container {
+            margin-bottom: 10px;
+        }
+        .metadata-row {
+            display: flex;
+            margin-bottom: 8px;
+        }
+        .metadata-row input {
+            flex: 1;
+            margin-right: 10px;
+        }
+        .metadata-row button {
+            width: auto;
+        }
+        .metadata-preview {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #f8f8f8;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+        .pagination {
+            display: flex;
+            justify-content: center;
+            margin-top: 20px;
+        }
+        .pagination button {
+            margin: 0 5px;
+            padding: 5px 10px;
+        }
+        .pagination-info {
+            text-align: center;
+            margin-top: 10px;
+            font-size: 0.9em;
+            color: #666;
+        }
+        .page-size-selector {
+            margin-left: 10px;
+        }
+        .release-disk-section {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+        }
+        .action-buttons {
+            margin: 15px 0;
+        }
     </style>
 </head>
 <body>
@@ -170,17 +217,42 @@
                     <input type="text" id="collectionName" placeholder="输入集合名称 (4-64个字符)">
                 </div>
                 
-                <div class="form-group">
-                    <label for="collectionMetadata">元数据 (JSON格式)</label>
-                    <textarea id="collectionMetadata" rows="3" placeholder='{"key": "value"}'></textarea>
+                <div class="form-group metadata-container">
+                    <label>元数据</label>
+                    <div id="collectionMetadataRows">
+                        <div class="metadata-row">
+                            <input type="text" placeholder="键" class="metadata-key">
+                            <input type="text" placeholder="值" class="metadata-value">
+                            <button onclick="addMetadataRow(this, 'collection')">+</button>
+                            <button onclick="removeMetadataRow(this)" class="danger">-</button>
+                        </div>
+                    </div>
+                    <button onclick="addMetadataRow(null, 'collection')">添加更多元数据</button>
+                    <div class="metadata-preview">
+                        <strong>元数据预览:</strong>
+                        <div id="collectionMetadataPreview">{}</div>
+                    </div>
                 </div>
                 
-                <button onclick="createCollection()" class="success">创建集合</button>
-                <button onclick="deleteCollection()" class="danger">删除集合</button>
-                <button onclick="changeCollection()">切换集合</button>
-                <button onclick="listCollections()">刷新集合列表</button>
+                <div class="action-buttons">
+                    <button onclick="createCollection()" class="success">创建集合</button>
+                    <button onclick="deleteCollection()" class="danger">删除集合</button>
+                    <button onclick="changeCollection()">切换集合</button>
+                    <button onclick="listCollections()">刷新集合列表</button>
+                </div>
                 
                 <div id="collectionStatus" class="status hidden"></div>
+                
+                <div class="release-disk-section">
+                    <h3>磁盘管理</h3>
+                    <div class="form-group">
+                        <label for="releasePath">释放集合磁盘空间</label>
+                        <input type="text" id="releasePath" placeholder="输入要释放的集合路径" style="margin-bottom: 10px;">
+                        <div>
+                            <button onclick="releaseDisk()" class="danger">释放磁盘空间</button>
+                        </div>
+                    </div>
+                </div>
                 
                 <h3>当前集合列表</h3>
                 <table id="collectionsTable">
@@ -205,17 +277,43 @@
                     <textarea id="dataText" rows="3" placeholder="输入要存储的文本"></textarea>
                 </div>
                 
-                <div class="form-group">
-                    <label for="dataMetadata">元数据 (JSON格式)</label>
-                    <textarea id="dataMetadata" rows="3" placeholder='{"key": "value"}'></textarea>
+                <div class="form-group metadata-container">
+                    <label>元数据</label>
+                    <div id="dataMetadataRows">
+                        <div class="metadata-row">
+                            <input type="text" placeholder="键" class="metadata-key">
+                            <input type="text" placeholder="值" class="metadata-value">
+                            <button onclick="addMetadataRow(this, 'data')">+</button>
+                            <button onclick="removeMetadataRow(this)" class="danger">-</button>
+                        </div>
+                    </div>
+                    <button onclick="addMetadataRow(null, 'data')">添加更多元数据</button>
+                    <div class="metadata-preview">
+                        <strong>元数据预览:</strong>
+                        <div id="dataMetadataPreview">{}</div>
+                    </div>
                 </div>
                 
-                <button onclick="storeData()" class="success">存储数据</button>
-                <button onclick="getAllData()">获取所有数据</button>
+                <div class="action-buttons">
+                    <button onclick="storeData()" class="success">存储数据</button>
+                    <button onclick="getAllData()">获取所有数据</button>
+                </div>
                 
                 <div id="dataStatus" class="status hidden"></div>
                 
                 <h3>当前集合中的数据</h3>
+                <div class="pagination-controls">
+                    <div class="form-group" style="display: inline-block; margin-right: 20px;">
+                        <label for="dataPageSize">每页显示:</label>
+                        <select id="dataPageSize" class="page-size-selector" onchange="changeDataPageSize()">
+                            <option value="5">5</option>
+                            <option value="10" selected>10</option>
+                            <option value="20">20</option>
+                            <option value="50">50</option>
+                        </select>
+                    </div>
+                    <div class="pagination-info" id="dataPaginationInfo">第 1 页，共 1 页</div>
+                </div>
                 <table id="dataTable">
                     <thead>
                         <tr>
@@ -227,6 +325,10 @@
                     </thead>
                     <tbody></tbody>
                 </table>
+                <div class="pagination" id="dataPagination">
+                    <button onclick="prevDataPage()" id="prevDataPage" disabled>上一页</button>
+                    <button onclick="nextDataPage()" id="nextDataPage" disabled>下一页</button>
+                </div>
             </div>
         </div>
         
@@ -250,11 +352,25 @@
                     <input type="number" id="similarityThreshold" value="0.5" min="0" max="1" step="0.1">
                 </div>
                 
-                <button onclick="queryData()">执行查询</button>
+                <div class="action-buttons">
+                    <button onclick="queryData()">执行查询</button>
+                </div>
                 
                 <div id="queryStatus" class="status hidden"></div>
                 
                 <h3>查询结果</h3>
+                <div class="pagination-controls">
+                    <div class="form-group" style="display: inline-block; margin-right: 20px;">
+                        <label for="queryPageSize">每页显示:</label>
+                        <select id="queryPageSize" class="page-size-selector" onchange="changeQueryPageSize()">
+                            <option value="5">5</option>
+                            <option value="10" selected>10</option>
+                            <option value="20">20</option>
+                            <option value="50">50</option>
+                        </select>
+                    </div>
+                    <div class="pagination-info" id="queryPaginationInfo">第 1 页，共 1 页</div>
+                </div>
                 <table id="queryResultsTable">
                     <thead>
                         <tr>
@@ -266,12 +382,30 @@
                     </thead>
                     <tbody></tbody>
                 </table>
+                <div class="pagination" id="queryPagination">
+                    <button onclick="prevQueryPage()" id="prevQueryPage" disabled>上一页</button>
+                    <button onclick="nextQueryPage()" id="nextQueryPage" disabled>下一页</button>
+                </div>
             </div>
         </div>
-    </div>
+        
 
     <script>
         let currentCollection = null;
+        
+        // 数据管理分页相关变量
+        let dataCurrentPage = 1;
+        let dataPageSize = 10;
+        let dataTotalItems = 0;
+        let dataTotalPages = 1;
+        let allDataItems = [];
+        
+        // 查询结果分页相关变量
+        let queryCurrentPage = 1;
+        let queryPageSize = 10;
+        let queryTotalItems = 0;
+        let queryTotalPages = 1;
+        let queryResults = [];
         
         // 切换标签页
         function openTab(evt, tabName) {
@@ -301,24 +435,134 @@
             }, 5000);
         }
         
+        // 添加元数据行
+        function addMetadataRow(button, type) {
+            const containerId = type === 'collection' ? 'collectionMetadataRows' : 'dataMetadataRows';
+            const container = document.getElementById(containerId);
+            
+            const newRow = document.createElement('div');
+            newRow.className = 'metadata-row';
+            newRow.innerHTML = `
+                <input type="text" placeholder="键" class="metadata-key">
+                <input type="text" placeholder="值" class="metadata-value">
+                <button onclick="addMetadataRow(this, '${type}')">+</button>
+                <button onclick="removeMetadataRow(this)" class="danger">-</button>
+            `;
+            
+            if (button) {
+                button.parentNode.parentNode.insertBefore(newRow, button.parentNode.nextSibling);
+            } else {
+                container.appendChild(newRow);
+            }
+            
+            // 为新的输入框添加事件监听器
+            const inputs = newRow.querySelectorAll('input');
+            inputs.forEach(input => {
+                input.addEventListener('input', () => updateMetadataPreview(type));
+            });
+            
+            updateMetadataPreview(type);
+        }
+        
+        // 移除元数据行
+        function removeMetadataRow(button) {
+            const row = button.parentNode;
+            const container = row.parentNode;
+            
+            // 确保至少保留一行
+            if (container.querySelectorAll('.metadata-row').length > 1) {
+                container.removeChild(row);
+                updateMetadataPreview(container.id.includes('collection') ? 'collection' : 'data');
+            }
+        }
+        
+        // 更新元数据预览
+        function updateMetadataPreview(type) {
+            const containerId = type === 'collection' ? 'collectionMetadataRows' : 'dataMetadataRows';
+            const previewId = type === 'collection' ? 'collectionMetadataPreview' : 'dataMetadataPreview';
+            
+            const rows = document.getElementById(containerId).querySelectorAll('.metadata-row');
+            const metadata = {};
+            
+            rows.forEach(row => {
+                const keyInput = row.querySelector('.metadata-key');
+                const valueInput = row.querySelector('.metadata-value');
+                const key = keyInput.value.trim();
+                const value = valueInput.value.trim();
+                
+                if (key) {
+                    metadata[key] = value;
+                }
+            });
+            
+            document.getElementById(previewId).textContent = JSON.stringify(metadata, null, 2);
+        }
+        
+        // 获取元数据对象
+        function getMetadata(type) {
+            const containerId = type === 'collection' ? 'collectionMetadataRows' : 'dataMetadataRows';
+            const rows = document.getElementById(containerId).querySelectorAll('.metadata-row');
+            const metadata = {};
+            
+            rows.forEach(row => {
+                const keyInput = row.querySelector('.metadata-key');
+                const valueInput = row.querySelector('.metadata-value');
+                const key = keyInput.value.trim();
+                const value = valueInput.value.trim();
+                
+                if (key) {
+                    metadata[key] = value;
+                }
+            });
+            
+            return metadata;
+        }
+        
+        // 设置元数据输入
+        function setMetadata(type, metadataObj) {
+            const containerId = type === 'collection' ? 'collectionMetadataRows' : 'dataMetadataRows';
+            const container = document.getElementById(containerId);
+            
+            // 清空现有行
+            container.innerHTML = '';
+            
+            // 如果没有元数据，添加一个空行
+            if (!metadataObj || Object.keys(metadataObj).length === 0) {
+                addMetadataRow(null, type);
+                return;
+            }
+            
+            // 为每个键值对添加一行
+            Object.entries(metadataObj).forEach(([key, value]) => {
+                const newRow = document.createElement('div');
+                newRow.className = 'metadata-row';
+                newRow.innerHTML = `
+                    <input type="text" placeholder="键" class="metadata-key" value="${key}">
+                    <input type="text" placeholder="值" class="metadata-value" value="${value}">
+                    <button onclick="addMetadataRow(this, '${type}')">+</button>
+                    <button onclick="removeMetadataRow(this)" class="danger">-</button>
+                `;
+                container.appendChild(newRow);
+                
+                // 为新的输入框添加事件监听器
+                const inputs = newRow.querySelectorAll('input');
+                inputs.forEach(input => {
+                    input.addEventListener('input', () => updateMetadataPreview(type));
+                });
+            });
+            
+            // 更新预览
+            updateMetadataPreview(type);
+        }
+        
         // 创建集合
         async function createCollection() {
             const name = document.getElementById("collectionName").value.trim();
-            const metadataText = document.getElementById("collectionMetadata").value.trim();
+            const metadata = getMetadata('collection');
             
             if (name.length < 4 || name.length > 64) {
                 showStatus("collectionStatus", "集合名称长度应在4-64个字符之间", false);
                 return;
-            }
-            
-            let metadata = {};
-            if (metadataText) {
-                try {
-                    metadata = JSON.parse(metadataText);
-                } catch (e) {
-                    showStatus("collectionStatus", "元数据不是有效的JSON格式", false);
-                    return;
-                }
             }
             
             try {
@@ -338,7 +582,7 @@
                 showStatus("collectionStatus", `集合 ${name} 创建成功`, true);
                 listCollections();
                 document.getElementById("collectionName").value = "";
-                document.getElementById("collectionMetadata").value = "";
+                setMetadata('collection', {});
             } catch (error) {
                 showStatus("collectionStatus", error.message, false);
             }
@@ -461,67 +705,47 @@
             document.getElementById("queryCollectionName").textContent = currentCollection || "未选择";
         }
         
-    // 存储数据
-    async function storeData() {
-        if (!currentCollection) {
-            showStatus("dataStatus", "请先选择集合", false);
-            return;
-        }
-        
-        const text = document.getElementById("dataText").value.trim();
-        const metadataText = document.getElementById("dataMetadata").value.trim();
-        
-        if (!text) {
-            showStatus("dataStatus", "请输入要存储的文本", false);
-            return;
-        }
-        
-        let metadata = {};
-        if (metadataText) {
-            try {
-                metadata = JSON.parse(metadataText);
-                if (typeof metadata !== 'object' || metadata === null) {
-                    throw new Error("元数据必须是对象");
-                }
-                // 确保所有值都是字符串
-                for (const key in metadata) {
-                    if (typeof metadata[key] !== 'string') {
-                        metadata[key] = String(metadata[key]);
-                    }
-                }
-                metadata = { ...metadata }; // 创建新对象以确保属性可枚举
-            } catch (e) {
-                showStatus("dataStatus", "元数据不是有效的JSON格式", false);
+        // 存储数据
+        async function storeData() {
+            if (!currentCollection) {
+                showStatus("dataStatus", "请先选择集合", false);
                 return;
             }
-        }
-        
-        try {
-            const response = await fetch("/rag/store", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                    text,
-                    metadata: Object.keys(metadata).length > 0 ? metadata : undefined
-                })
-            });
             
-            if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.detail || "存储数据失败");
+            const text = document.getElementById("dataText").value.trim();
+            const metadata = getMetadata('data');
+            
+            if (!text) {
+                showStatus("dataStatus", "请输入要存储的文本", false);
+                return;
             }
             
-            showStatus("dataStatus", "数据存储成功", true);
-            document.getElementById("dataText").value = "";
-            document.getElementById("dataMetadata").value = "";
-            getAllData();
-        } catch (error) {
-            showStatus("dataStatus", error.message, false);
+            try {
+                const response = await fetch("/rag/store", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        text,
+                        metadata: Object.keys(metadata).length > 0 ? metadata : undefined
+                    })
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || "存储数据失败");
+                }
+                
+                showStatus("dataStatus", "数据存储成功", true);
+                document.getElementById("dataText").value = "";
+                setMetadata('data', {});
+                getAllData();
+            } catch (error) {
+                showStatus("dataStatus", error.message, false);
+            }
         }
-    }
-    
+        
         // 获取所有数据
         async function getAllData() {
             if (!currentCollection) {
@@ -538,51 +762,102 @@
                 }
                 
                 const data = await response.json();
-                const tableBody = document.querySelector("#dataTable tbody");
-                tableBody.innerHTML = "";
+                allDataItems = data.data || [];
+                dataTotalItems = allDataItems.length;
+                dataTotalPages = Math.ceil(dataTotalItems / dataPageSize);
                 
-                if (data.data && data.data.length > 0) {
-                    data.data.forEach(item => {
-                        const row = document.createElement("tr");
-                        
-                        const idCell = document.createElement("td");
-                        idCell.textContent = item.id;
-                        row.appendChild(idCell);
-                        
-                        const textCell = document.createElement("td");
-                        textCell.textContent = item.document;
-                        row.appendChild(textCell);
-                        
-                        const metadataCell = document.createElement("td");
-                        metadataCell.textContent = JSON.stringify(item.metadata || {}, null, 2);
-                        row.appendChild(metadataCell);
-                        
-                        const actionCell = document.createElement("td");
-                        
-                        const deleteButton = document.createElement("button");
-                        deleteButton.textContent = "删除";
-                        deleteButton.classList.add("danger");
-                        deleteButton.onclick = () => deleteItem(item.id);
-                        actionCell.appendChild(deleteButton);
-                        
-                        const updateButton = document.createElement("button");
-                        updateButton.textContent = "更新";
-                        updateButton.onclick = () => prepareUpdate(item);
-                        actionCell.appendChild(updateButton);
-                        
-                        row.appendChild(actionCell);
-                        tableBody.appendChild(row);
-                    });
-                } else {
-                    const row = document.createElement("tr");
-                    const cell = document.createElement("td");
-                    cell.colSpan = 4;
-                    cell.textContent = "当前集合中没有数据";
-                    row.appendChild(cell);
-                    tableBody.appendChild(row);
-                }
+                updateDataPagination();
+                renderDataTable();
             } catch (error) {
                 showStatus("dataStatus", error.message, false);
+            }
+        }
+        
+        // 渲染数据表格
+        function renderDataTable() {
+            const tableBody = document.querySelector("#dataTable tbody");
+            tableBody.innerHTML = "";
+            
+            if (allDataItems.length === 0) {
+                const row = document.createElement("tr");
+                const cell = document.createElement("td");
+                cell.colSpan = 4;
+                cell.textContent = "当前集合中没有数据";
+                row.appendChild(cell);
+                tableBody.appendChild(row);
+                return;
+            }
+            
+            const startIndex = (dataCurrentPage - 1) * dataPageSize;
+            const endIndex = Math.min(startIndex + dataPageSize, dataTotalItems);
+            
+            for (let i = startIndex; i < endIndex; i++) {
+                const item = allDataItems[i];
+                const row = document.createElement("tr");
+                
+                const idCell = document.createElement("td");
+                idCell.textContent = item.id;
+                row.appendChild(idCell);
+                
+                const textCell = document.createElement("td");
+                textCell.textContent = item.document;
+                row.appendChild(textCell);
+                
+                const metadataCell = document.createElement("td");
+                metadataCell.textContent = JSON.stringify(item.metadata || {}, null, 2);
+                row.appendChild(metadataCell);
+                
+                const actionCell = document.createElement("td");
+                
+                const deleteButton = document.createElement("button");
+                deleteButton.textContent = "删除";
+                deleteButton.classList.add("danger");
+                deleteButton.onclick = () => deleteItem(item.id);
+                actionCell.appendChild(deleteButton);
+                
+                const updateButton = document.createElement("button");
+                updateButton.textContent = "更新";
+                updateButton.onclick = () => prepareUpdate(item);
+                actionCell.appendChild(updateButton);
+                
+                row.appendChild(actionCell);
+                tableBody.appendChild(row);
+            }
+        }
+        
+        // 更新数据分页控件
+        function updateDataPagination() {
+            document.getElementById("dataPaginationInfo").textContent = 
+                `第 ${dataCurrentPage} 页，共 ${dataTotalPages} 页 (共 ${dataTotalItems} 条数据)`;
+            
+            document.getElementById("prevDataPage").disabled = dataCurrentPage <= 1;
+            document.getElementById("nextDataPage").disabled = dataCurrentPage >= dataTotalPages;
+        }
+        
+        // 改变数据页大小
+        function changeDataPageSize() {
+            dataPageSize = parseInt(document.getElementById("dataPageSize").value);
+            dataCurrentPage = 1;
+            dataTotalPages = Math.ceil(dataTotalItems / dataPageSize);
+            updateDataPagination();
+            renderDataTable();
+        }
+        
+        // 上一页数据
+        function prevDataPage() {
+            if (dataCurrentPage > 1) {
+                dataCurrentPage--;
+                updateDataPagination();
+                renderDataTable();
+            }
+        }
+        
+        // 下一页数据
+        function nextDataPage() {
+            if (dataCurrentPage < dataTotalPages) {
+                dataCurrentPage++;
+                updateDataPagination();
+                renderDataTable();
             }
         }
         
@@ -606,49 +881,59 @@
                     throw new Error(error.detail || "删除数据失败");
                 }
                 
-                showStatus("dataStatus", "数据删除成功", true);
+                showStatus("dataStatus", `ID ${id} 删除成功`, true);
                 getAllData();
             } catch (error) {
                 showStatus("dataStatus", error.message, false);
             }
         }
+
         
-        // 准备更新数据
+        // 准备更新数据项
         function prepareUpdate(item) {
-            document.getElementById("dataText").value = item.document;
-            document.getElementById("dataMetadata").value = JSON.stringify(item.metadata || {}, null, 2);
+            document.getElementById("dataText").value = item.document || "";
+            setMetadata('data', item.metadata || {});
+            
+            // 添加一个隐藏的ID字段用于更新
+            const updateIdInput = document.createElement("input");
+            updateIdInput.type = "hidden";
+            updateIdInput.id = "updateId";
+            updateIdInput.value = item.id;
+            
+            const formGroup = document.querySelector("#data .form-group:first-child");
+            if (!document.getElementById("updateId")) {
+                formGroup.appendChild(updateIdInput);
+            } else {
+                document.getElementById("updateId").value = item.id;
+            }
             
             // 修改存储按钮为更新按钮
-            const storeButton = document.querySelector("#data button.success");
-            storeButton.textContent = "更新数据";
-            storeButton.onclick = async () => {
-                await updateItem(item.id);
-                // 恢复按钮状态
-                storeButton.textContent = "存储数据";
-                storeButton.onclick = storeData;
-            };
+            const storeBtn = document.querySelector("button[onclick='storeData()']");
+            storeBtn.textContent = "更新数据";
+            storeBtn.onclick = updateData;
             
-            showStatus("dataStatus", `准备更新ID为 ${item.id} 的数据`, true);
+            storeBtn.classList.remove("success");
+            storeBtn.classList.add("warning");
+            storeBtn.style.backgroundColor = "#f39c12";
+            
+            showStatus("dataStatus", `准备更新ID ${item.id}`, true);
         }
         
-        // 更新数据项
-        async function updateItem(id) {
+        // 更新数据
+        async function updateData() {
+            const updateId = document.getElementById("updateId")?.value;
+            
+            if (!updateId) {
+                showStatus("dataStatus", "更新失败：缺少ID", false);
+                return;
+            }
+            
             const text = document.getElementById("dataText").value.trim();
-            const metadataText = document.getElementById("dataMetadata").value.trim();
+            const metadata = getMetadata('data');
             
             if (!text) {
                 showStatus("dataStatus", "请输入要更新的文本", false);
                 return;
-            }
-            
-            let metadata = {};
-            if (metadataText) {
-                try {
-                    metadata = JSON.parse(metadataText);
-                } catch (e) {
-                    showStatus("dataStatus", "元数据不是有效的JSON格式", false);
-                    return;
-                }
             }
             
             try {
@@ -658,9 +943,9 @@
                         "Content-Type": "application/json",
                     },
                     body: JSON.stringify({
-                        id,
+                        id: updateId,
                         text,
-                        metadata
+                        metadata: Object.keys(metadata).length > 0 ? metadata : undefined
                     })
                 });
                 
@@ -669,93 +954,215 @@
                     throw new Error(error.detail || "更新数据失败");
                 }
                 
-                showStatus("dataStatus", "数据更新成功", true);
+                showStatus("dataStatus", `ID ${updateId} 更新成功`, true);
                 document.getElementById("dataText").value = "";
-                document.getElementById("dataMetadata").value = "";
+                setMetadata('data', {});
+                
+                // 恢复存储按钮
+                const storeBtn = document.querySelector("button[onclick='updateData']");
+                storeBtn.textContent = "存储数据";
+                storeBtn.onclick = storeData;
+                storeBtn.classList.remove("warning");
+                storeBtn.classList.add("success");
+                storeBtn.style.backgroundColor = "";
+                
+                // 移除隐藏的ID字段
+                const updateIdInput = document.getElementById("updateId");
+                if (updateIdInput) {
+                    updateIdInput.remove();
+                }
+                
                 getAllData();
             } catch (error) {
                 showStatus("dataStatus", error.message, false);
             }
         }
         
-        // 查询数据
-        async function queryData() {
-            if (!currentCollection) {
-                showStatus("queryStatus", "请先选择集合", false);
+    // 查询数据
+    async function queryData() {
+        if (!currentCollection) {
+            showStatus("queryStatus", "请先选择集合", false);
+            return;
+        }
+        
+        const queryText = document.getElementById("queryText").value.trim();
+        const topK = parseInt(document.getElementById("topK").value);
+        const similarityThreshold = parseFloat(document.getElementById("similarityThreshold").value);
+        
+        if (!queryText) {
+            showStatus("queryStatus", "请输入查询文本", false);
+            return;
+        }
+        
+        try {
+            const response = await fetch("/rag/query", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    query_text: queryText,
+                    top_k: topK,
+                    similarity: similarityThreshold
+                })
+            });
+            
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || "查询失败");
+            }
+            
+            const data = await response.json();
+            console.log("原始数据:", data);
+            
+            queryResults = Array.isArray(data) ? data : []; // 确保是数组
+            queryTotalItems = queryResults.length;
+            queryTotalPages = Math.ceil(queryTotalItems / queryPageSize);
+            
+            updateQueryPagination();
+            renderQueryResults();
+        } catch (error) {
+            showStatus("queryStatus", error.message, false);
+        }
+    }
+
+    function renderQueryResults() {
+        const tableBody = document.querySelector("#queryResultsTable tbody");
+        if (!tableBody) {
+            console.error("表格 body 元素未找到");
+            return;
+        }
+        tableBody.innerHTML = "";
+        
+        if (queryResults.length === 0) {
+            const row = document.createElement("tr");
+            row.innerHTML = `<td colspan="4">没有匹配的查询结果</td>`;
+            tableBody.appendChild(row);
+            return;
+        }
+        
+        const startIndex = (queryCurrentPage - 1) * queryPageSize;
+        const endIndex = Math.min(startIndex + queryPageSize, queryTotalItems);
+        
+        for (let i = startIndex; i < endIndex; i++) {
+            const result = queryResults[i] || {};
+            const row = document.createElement("tr");
+            
+            // 相似度
+            const scoreCell = document.createElement("td");
+            scoreCell.textContent = result.similarity || "N/A";
+            row.appendChild(scoreCell);
+            
+            // 文本内容
+            const textCell = document.createElement("td");
+            textCell.textContent = result.document || "无内容";
+            row.appendChild(textCell);
+            
+            // 元数据
+            const metadataCell = document.createElement("td");
+            metadataCell.textContent = result.metadata ? 
+                JSON.stringify(result.metadata, null, 2) : "无元数据";
+            row.appendChild(metadataCell);
+            
+            // ID
+            const idCell = document.createElement("td");
+            idCell.textContent = result.id || "未知ID";
+            row.appendChild(idCell);
+            
+            tableBody.appendChild(row);
+        }
+    }
+
+        
+        // 更新查询分页控件
+        function updateQueryPagination() {
+            document.getElementById("queryPaginationInfo").textContent = 
+                `第 ${queryCurrentPage} 页，共 ${queryTotalPages} 页 (共 ${queryTotalItems} 条结果)`;
+            
+            document.getElementById("prevQueryPage").disabled = queryCurrentPage <= 1;
+            document.getElementById("nextQueryPage").disabled = queryCurrentPage >= queryTotalPages;
+        }
+        
+        // 改变查询页大小
+        function changeQueryPageSize() {
+            queryPageSize = parseInt(document.getElementById("queryPageSize").value);
+            queryCurrentPage = 1;
+            queryTotalPages = Math.ceil(queryTotalItems / queryPageSize);
+            updateQueryPagination();
+            renderQueryResults();
+        }
+        
+        // 上一页查询结果
+        function prevQueryPage() {
+            if (queryCurrentPage > 1) {
+                queryCurrentPage--;
+                updateQueryPagination();
+                renderQueryResults();
+            }
+        }
+        
+        // 下一页查询结果
+        function nextQueryPage() {
+            if (queryCurrentPage < queryTotalPages) {
+                queryCurrentPage++;
+                updateQueryPagination();
+                renderQueryResults();
+            }
+        }
+
+        // 释放磁盘空间
+        async function releaseDisk() {
+            const path = document.getElementById("releasePath").value.trim();
+            
+            if (!path) {
+                showStatus("collectionStatus", "请输入要释放的集合路径", false);
                 return;
             }
             
-            const queryText = document.getElementById("queryText").value.trim();
-            const topK = document.getElementById("topK").value;
-            const similarityThreshold = document.getElementById("similarityThreshold").value;
-            
-            if (!queryText) {
-                showStatus("queryStatus", "请输入查询文本", false);
+            if (!confirm(`确定要释放集合 ${path} 的磁盘空间吗？`)) {
                 return;
             }
             
             try {
-                const response = await fetch("/rag/query", {
+                const response = await fetch("/rag/release_disk", {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",
                     },
                     body: JSON.stringify({
-                        query_text: queryText,
-                        top_k: parseInt(topK),
-                        similarity: parseFloat(similarityThreshold)
+                        path: path
                     })
                 });
                 
                 if (!response.ok) {
                     const error = await response.json();
-                    throw new Error(error.detail || "查询失败");
+                    throw new Error(error.detail || "释放磁盘空间失败");
                 }
                 
-                const data = await response.json();
-                const tableBody = document.querySelector("#queryResultsTable tbody");
-                tableBody.innerHTML = "";
-                
-                if (data.result && data.result.length > 0) {
-                    data.result.forEach(item => {
-                        const row = document.createElement("tr");
-                        
-                        const similarityCell = document.createElement("td");
-                        similarityCell.textContent = item.similarity;
-                        row.appendChild(similarityCell);
-                        
-                        const documentCell = document.createElement("td");
-                        documentCell.textContent = item.document;
-                        row.appendChild(documentCell);
-                        
-                        const metadataCell = document.createElement("td");
-                        metadataCell.textContent = JSON.stringify(item.metadata || {}, null, 2);
-                        row.appendChild(metadataCell);
-                        
-                        const idCell = document.createElement("td");
-                        idCell.textContent = item.id;
-                        row.appendChild(idCell);
-                        
-                        tableBody.appendChild(row);
-                    });
-                } else {
-                    const row = document.createElement("tr");
-                    const cell = document.createElement("td");
-                    cell.colSpan = 4;
-                    cell.textContent = "没有找到匹配的结果";
-                    row.appendChild(cell);
-                    tableBody.appendChild(row);
-                }
-                
-                showStatus("queryStatus", `找到 ${data.result.length} 条结果`, true);
+                const result = await response.json();
+                showStatus("collectionStatus", result.message, true);
+                document.getElementById("releasePath").value = "";
             } catch (error) {
-                showStatus("queryStatus", error.message, false);
+                showStatus("collectionStatus", error.message, false);
             }
         }
+
         
         // 初始化页面
-        document.addEventListener("DOMContentLoaded", () => {
+        document.addEventListener("DOMContentLoaded", function() {
             listCollections();
+            updateCurrentCollectionDisplay();
+            
+            // 为现有的元数据输入框添加事件监听器
+            document.querySelectorAll('.metadata-key, .metadata-value').forEach(input => {
+                input.addEventListener('input', () => {
+                    const container = input.closest('.metadata-container');
+                    if (container) {
+                        const type = container.id.includes('collection') ? 'collection' : 'data';
+                        updateMetadataPreview(type);
+                    }
+                });
+            });
         });
     </script>
 </body>

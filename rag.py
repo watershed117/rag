@@ -21,10 +21,10 @@ class RAG:
 
     def check_collection(self, collection_name: str) -> bool:
         collections = self.client.list_collections()
-        if collection_name in collections:
-            return True
-        else:
-            return False
+        for collection in collections:
+            if collection.name==collection_name:
+                return True
+        return False
         
     def create_collection(self, collection_name: str, embedding_function:EmbeddingFunction|None = None, metadata:dict = {}) -> chromadb.Collection:
         if self.check_collection(collection_name):
@@ -46,14 +46,12 @@ class RAG:
         return None
 
     def change_collection(self, collection_name: str) -> None:
-        collections = self.client.list_collections()
-        if collection_name not in collections:
-            raise ValueError(f"collection {collection_name} not found")
+        if self.check_collection(collection_name=collection_name):
+            self.collection = self.client.get_collection(collection_name,embedding_function=self.embedding_function)
+            return None
         else:
-            for collection in collections:
-                if collection == collection_name:
-                    self.collection = self.client.get_collection(collection_name,embedding_function=self.embedding_function)
-                    return None
+            raise ValueError(f"collection {collection_name} not found")
+        
 
     def store(self, 
             text: Union[str, List[str]], 

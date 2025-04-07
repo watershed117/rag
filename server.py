@@ -15,6 +15,7 @@ import json
 import uvicorn
 from rag import RAG
 from chromadb.utils.embedding_functions.openai_embedding_function import OpenAIEmbeddingFunction
+from chromadb import Collection
 from fastapi.responses import JSONResponse
 from fastapi.responses import FileResponse
 
@@ -85,7 +86,9 @@ async def change_database(name: str):
 @app.get("/rag/list_collections")
 async def list_collections():
     collections = rag.client.list_collections()
-    return JSONResponse(content={"collections": collections})
+    if collections and isinstance(collections[0],Collection):
+        collection_names = [c.name for c in collections]
+        return JSONResponse(content={"collections": collection_names})
 
 class store_data(BaseModel):
     text: str
@@ -105,7 +108,7 @@ class query_data(BaseModel):
 @app.post("/rag/query")
 async def query(data: query_data):
     result = rag.query(data.query_text, top_k=data.top_k,similarity_value=data.similarity)
-    return JSONResponse(content={"result": result})
+    return JSONResponse(content=result)
 
 class update_data(BaseModel):
     id: str
@@ -128,10 +131,12 @@ async def get_data():
     result = rag.get_data()
     return JSONResponse(content={"data": result})
 
-@app.get("/rag/release_disk/{path}")
-async def release_disk(path: str):
-    rag.release_disk(path)
-    return JSONResponse(content={"message": f"collection {path} disk released"})
+class release_disk_data(BaseModel):
+    path:str
+@app.post("/rag/release_disk")
+async def release_disk(data:release_disk_data):
+    rag.release_disk(data.path)
+    return JSONResponse(content={"message": f"collection {data.path} disk released"})
 
 @app.get("/")
 async def serve_frontend():
